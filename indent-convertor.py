@@ -1,28 +1,54 @@
-#!/bin/env python3
-import argparse
+#!/usr/bin/env python3
+from sys import exit, stderr
 from argparse import ArgumentParser
-from os.path import exists
+from pathlib import Path
+from shutil import copyfile
 
-parser = ArgumentParser()
+def convert(lines, to_tabs=True, size=4):
+    converted = []
+    for line in lines:
+        stripped = line.rstrip("\n")
 
-parser.description = "Converts spaces into tabs, or tabs into spaces! Whitespace-only lines will be cleared entirely"
+        if not stripped.strip():
+            converted.append("\n")
+            continue
 
-parser.add_argument("type", help="Type of indentation to convert to", choices=["tab", "space"], type=str)
-parser.add_argument("size", help="The amount of spaces per indent", type=int)
-parser.add_argument("file", help="The file to be converted", type=str)
+        if to_tabs:
+            spaces = len(stripped) - len(stripped.lstrip(" "))
+            tabs = spaces // size
+            new_line = "\t" * tabs + stripped[spaces:]
+        else:
+            tabs = len(stripped) - len(stripped.lstrip("\t"))
+            new_line = " " * (size * tabs) + stripped[tabs:]
 
+        converted.append(new_line + "\n")
+
+    return converted
+
+
+parser = ArgumentParser(description="Converts spaces into tabs, or tabs into spaces! Whitespace-only lines will be cleared entirely.")
+parser.add_argument("type", choices=["tab", "space"], help="Type of indentation to convert to")
+parser.add_argument("size", type=int, help="The number of spaces per indent")
+parser.add_argument("file", type=str, help="The file to be converted")
+parser.add_argument("-n", "--no-backup", help="Do not create a backup file", action="store_true")
 args = parser.parse_args()
 
-TYPE = args.type
-SIZE = args.size
-FILE = args.file
-
-
-if not exists(FILE):
-    print(f"File {FILE} does not exist!")
+file_path = Path(args.file)
+if not file_path.exists():
+    print(f"Error: {file_path} does not exist!", file=stderr)
     exit(1)
 
-with open(FILE, "r") as file:
-    lines = file.readlines()
+if not args.no_backup:
+    backup = file_path.with_suffix(file_path.suffix + ".bak")
+    copyfile(file_path, backup)
+    print(f"Backup created: {backup}")
 
+with file_path.open("r") as f:
+    lines = f.readlines()
 
+converted = convert(lines, to_tabs=(args.type == "tab"), size=args.size)
+
+with file_path.open("w") as f:
+    f.writelines(converted)
+
+print(f"Conversion to {args.type} complete.")
